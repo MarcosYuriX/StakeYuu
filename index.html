@@ -188,6 +188,10 @@
     <div class="modal-body">
       <div class="field"><label>Nome da banca</label><input type="text" id="inpBancaNome" placeholder="Ex: Banca principal"></div>
       <div class="field"><label>Banca inicial (R$)</label><input type="text" inputmode="decimal" id="inpBancaInicial" placeholder="Ex: 1000"></div>
+      <div class="field"><label>Chave API Gemini (leitura de print com IA)</label>
+        <input type="text" id="inpGeminiKey" placeholder="Opcional — crie grátis em aistudio.google.com/apikey">
+        <p class="hint">Com a chave, os prints são lidos pela IA do Google (muito mais precisa). Sem ela, usa o leitor OCR normal. A chave fica salva só na sua conta.</p>
+      </div>
       <div class="field"><label>Palavras ignoradas na leitura do print</label>
         <textarea id="inpOcrIgnorar" rows="2" placeholder="Separe por vírgula. Ex: Flamengo x Vasco, Brasileirão, Ao vivo"></textarea>
         <p class="hint">Linhas do print que contenham essas palavras não serão usadas como título da aposta.</p>
