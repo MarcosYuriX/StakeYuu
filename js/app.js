@@ -1,10 +1,10 @@
-/* ===== StakeYuu — app.js ===== */
+/* ===== StakeYuu - app.js ===== */
 
 /* ============================================================
-   CONFIG DA NUVEM (Supabase) — cole aqui os dados do seu projeto
+   CONFIG DA NUVEM (Supabase) — aqui voce ira colar os dados do seu projeto
    (Supabase → Settings → API). Deixando em branco, o app funciona
-   no modo local (dados só neste navegador), como antes.
-   A "anon key" é pública por design — a segurança vem das
+   no modo local (seus dados ficaram somente no navegador).
+   A "anon key" é pública a segurança vem das
    políticas RLS criadas pelo supabase.sql.
    ============================================================ */
 const SUPABASE_URL = 'https://rbziuqdcpahumyxttuvc.supabase.co';
