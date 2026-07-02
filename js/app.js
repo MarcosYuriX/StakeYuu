@@ -551,8 +551,10 @@ function aplicarOcr(texto) {
   if (!ganho && moedas.length > 1) ganho = moedas[moedas.length - 1].valor;
 
   // Odds: números decimais que NÃO são valores monetários
+  // (também ignora números de linha de mercado, ex: "Mais de 3.5", "Over 2.5")
   const textoSemMoeda = texto.replace(RE_MOEDA, ' ');
-  const odds = [...textoSemMoeda.matchAll(/\b(\d{1,3}[.,]\d{2,3})\b/g)]
+  const textoOdds = textoSemMoeda.replace(/(mais de|menos de|acima de|abaixo de|over|under)\s*\d{1,3}[.,]?\d{0,3}/gi, ' ');
+  const odds = [...textoOdds.matchAll(/\b(\d{1,3}[.,]\d{2,3})\b/g)]
     .map(m => parseNum(m[1])).filter(v => v >= 1.01 && v <= 500);
 
   let odd = 0;
@@ -568,6 +570,14 @@ function aplicarOcr(texto) {
     if (!odd) {
       const calc = ganho / stake;
       if (calc >= 1.01 && calc <= 500) odd = +calc.toFixed(2);
+    }
+  }
+  // Odd turbinada sem valores no print: par "riscada ➜ nova" na mesma linha → pega a segunda
+  if (!odd) {
+    const par = textoOdds.match(/\b(\d{1,3}[.,]\d{2,3})\b[^\d\n]{1,8}\b(\d{1,3}[.,]\d{2,3})\b/);
+    if (par) {
+      const v = parseNum(par[2]);
+      if (v >= 1.01 && v <= 500) odd = v;
     }
   }
   // Senão: linha com "odds"/"cotação"
@@ -607,28 +617,57 @@ function aplicarOcr(texto) {
     // Palavras típicas de mercado (indicam que a linha É o título da aposta)
     const MERCADO = ['marcar', 'marca', 'gol', 'gols', 'escanteio', 'cartõ', 'cartão', 'vencer',
       'vence', 'ganham', 'ganha', 'ambas', 'ambos', 'mais de', 'menos de', 'acima de',
-      'handicap', 'dupla chance', 'empate', 'finaliza', 'chute', 'assistência', 'ponto', 'sets'];
+      'handicap', 'dupla chance', 'empate', 'finaliza', 'chute', 'assistência', 'ponto', 'sets',
+      'qualificar', 'classificar', 'defesa', 'rebote', 'jogador'];
 
-    const linhas = texto.split('\n').map(l => l.trim())
-      .filter(l => l.length >= 10 && /[a-zA-ZÀ-ú]{4,}/.test(l) && !/R\$/.test(l)
+    // Emenda linhas quebradas pelo OCR: termina em conectivo ou a próxima começa minúscula
+    const CONTINUA = /(?:^|\s)(e|de|da|do|dos|das|na|no|nas|nos|ou|com|por|para|a|o|à|ao|&)$|[:\-+,]$/i;
+    const brutas = [];
+    for (const s of texto.split('\n').map(x => x.trim())) {
+      const ant = brutas[brutas.length - 1];
+      if (s && ant && (ant.length + s.length) < 120 &&
+          (CONTINUA.test(ant) || /^[a-zà-ú]/.test(s)) && /[a-zA-ZÀ-ú]/.test(s)) {
+        brutas[brutas.length - 1] = ant + ' ' + s;
+      } else {
+        brutas.push(s);
+      }
+    }
+    const linhas = [];
+    brutas.forEach((l, idxBruta) => {
+      if (l.length >= 10 && /[a-zA-ZÀ-ú]{4,}/.test(l) && !/R\$/.test(l)
         && !CASAS_CONHECIDAS.some(c => l.toLowerCase() === c.toLowerCase())
-        && !ignorar.some(p => l.toLowerCase().includes(p)));
+        && !ignorar.some(p => l.toLowerCase().includes(p))) linhas.push({ l, idxBruta });
+    });
 
     if (linhas.length) {
-      const pontuar = (l, idx) => {
-        const low = l.toLowerCase();
-        let p = 0;
-        p += Math.max(0, 10 - idx * 2);                 // linhas do topo valem mais
-        if (MERCADO.some(m => low.includes(m))) p += 15; // parece mercado de aposta
-        if (/\s[x×]\s|\svs\.?\s/i.test(l)) p -= 8;       // parece nome de evento (Time x Time)
-        if (l.length > 25) p += 2;
-        return p;
-      };
-      const melhor = linhas
-        .map((l, i) => ({ l, p: pontuar(l, i) }))
-        .sort((a, b) => b.p - a.p)[0];
-      inpTitulo.value = melhor.l.slice(0, 90);
-      achouAlgo = true;
+      const ehMercado = l => MERCADO.some(m => l.toLowerCase().includes(m));
+      const doMercado = linhas.filter(o => ehMercado(o.l));
+
+      if (doMercado.length >= 2) {
+        // Aposta criada / múltipla: junta as seleções (linhas adjacentes viram uma só)
+        const grupos = [];
+        for (const o of doMercado) {
+          const ultimo = grupos[grupos.length - 1];
+          if (ultimo && o.idxBruta === ultimo.fim + 1) { ultimo.txt += ' ' + o.l; ultimo.fim = o.idxBruta; }
+          else grupos.push({ txt: o.l, fim: o.idxBruta });
+        }
+        inpTitulo.value = grupos.map(g => g.txt).join(' + ').slice(0, 90);
+        achouAlgo = true;
+      } else {
+        const pontuar = (o, idx) => {
+          const low = o.l.toLowerCase();
+          let p = Math.max(0, 10 - idx * 2);                 // linhas do topo valem mais
+          if (ehMercado(o.l)) p += 15;                       // parece mercado de aposta
+          if (/\s[x×]\s|\svs\.?\s/i.test(o.l)) p -= 8;       // parece nome de evento (Time x Time)
+          if (o.l.length > 25) p += 2;
+          return p;
+        };
+        const melhor = linhas
+          .map((o, i) => ({ l: o.l, p: pontuar(o, i) }))
+          .sort((a, b) => b.p - a.p)[0];
+        inpTitulo.value = melhor.l.slice(0, 90);
+        achouAlgo = true;
+      }
     }
   }
   return achouAlgo;
